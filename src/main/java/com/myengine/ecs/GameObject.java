@@ -29,6 +29,19 @@ public class GameObject {
         return component;
     }
 
+    /** Every component attached to this object, including its Transform. */
+    public List<Component> getComponents() {
+        return components;
+    }
+
+    /** Detaches a component. The Transform can't be removed — every object needs one. */
+    public void removeComponent(Component component) {
+        if (component == transform) {
+            return;
+        }
+        components.remove(component);
+    }
+
     @SuppressWarnings("unchecked")
     public <T extends Component> T getComponent(Class<T> type) {
         for (Component c : components) {
@@ -39,9 +52,11 @@ public class GameObject {
         return null;
     }
 
-    public void update(float deltaTime) {
+    public void update(float deltaTime, boolean playing) {
         for (Component c : components) {
-            c.update(deltaTime);
+            if (playing || c.runsInEditMode()) {
+                c.update(deltaTime);
+            }
         }
     }
 }

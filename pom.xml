@@ -14,6 +14,8 @@
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <lwjgl.version>3.4.2</lwjgl.version>
         <joml.version>1.10.9</joml.version>
+        <imgui.version>1.92.0</imgui.version>
+        <gson.version>2.14.0</gson.version>
     </properties>
 
     <!-- The LWJGL BOM keeps every LWJGL module on the same version automatically -->
@@ -61,6 +63,25 @@
             <artifactId>joml</artifactId>
             <version>${joml.version}</version>
         </dependency>
+
+        <!--
+          Dear ImGui, via imgui-java: powers the editor overlay (Hierarchy, Inspector,
+          Build panel). imgui-java-binding is the core JNI binding; imgui-java-lwjgl3
+          provides the GLFW+OpenGL3 glue we hook into our own window/render loop.
+          (One native jar covers macOS Intel + Apple Silicon, unlike LWJGL's split.)
+        -->
+        <dependency><groupId>io.github.spair</groupId><artifactId>imgui-java-binding</artifactId><version>${imgui.version}</version></dependency>
+        <dependency><groupId>io.github.spair</groupId><artifactId>imgui-java-lwjgl3</artifactId><version>${imgui.version}</version></dependency>
+        <dependency><groupId>io.github.spair</groupId><artifactId>imgui-java-natives-windows</artifactId><version>${imgui.version}</version></dependency>
+        <dependency><groupId>io.github.spair</groupId><artifactId>imgui-java-natives-linux</artifactId><version>${imgui.version}</version></dependency>
+        <dependency><groupId>io.github.spair</groupId><artifactId>imgui-java-natives-macos</artifactId><version>${imgui.version}</version></dependency>
+
+        <!-- Gson: used by SceneIO to save/load the scene as JSON (src/main/resources/scene.json) -->
+        <dependency>
+            <groupId>com.google.code.gson</groupId>
+            <artifactId>gson</artifactId>
+            <version>${gson.version}</version>
+        </dependency>
     </dependencies>
 
     <build>
@@ -78,6 +99,35 @@
                 <configuration>
                     <mainClass>com.mygame.Main</mainClass>
                 </configuration>
+            </plugin>
+            <!--
+              Bundles the game + all dependencies (LWJGL, JOML, ImGui, natives) into one
+              runnable jar on "mvn package" — this is what the editor's Build button runs.
+              Main-Class is GamePlayer, NOT Main: GamePlayer runs with the editor overlay
+              off, so the built jar is the actual game (like a Unity Player build), not
+              the dev environment. Use Main.java (via IntelliJ's Run button) for developing.
+              Output: target/java3d-engine-1.0-SNAPSHOT.jar (the "-original.jar" alongside
+              it is the slim, non-runnable pre-shade jar — ignore that one).
+            -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-shade-plugin</artifactId>
+                <version>3.5.1</version>
+                <executions>
+                    <execution>
+                        <phase>package</phase>
+                        <goals>
+                            <goal>shade</goal>
+                        </goals>
+                        <configuration>
+                            <transformers>
+                                <transformer implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
+                                    <mainClass>com.mygame.GamePlayer</mainClass>
+                                </transformer>
+                            </transformers>
+                        </configuration>
+                    </execution>
+                </executions>
             </plugin>
         </plugins>
     </build>

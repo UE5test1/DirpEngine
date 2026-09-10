@@ -3,6 +3,9 @@ package com.myengine.components;
 import com.myengine.core.Input;
 import com.myengine.ecs.Component;
 import com.myengine.ecs.Transform;
+import com.myengine.editor.EditorUI;
+import imgui.ImGui;
+import imgui.ImGuiIO;
 import org.joml.Vector3f;
 
 import static org.lwjgl.glfw.GLFW.*;
@@ -17,7 +20,22 @@ public class FreeCameraController extends Component {
     public float mouseSensitivity = 0.15f;
 
     @Override
+    public boolean runsInEditMode() {
+        return true; // flying the camera around is navigation, not gameplay
+    }
+
+    @Override
     public void update(float deltaTime) {
+        // Let the editor UI have the mouse/keyboard when you're interacting with it
+        // (e.g. dragging an Inspector field) instead of also flying the camera.
+        // Guarded by EditorUI.active: a built Player has no ImGui context at all.
+        if (EditorUI.active) {
+            ImGuiIO io = ImGui.getIO();
+            if (io.getWantCaptureMouse() || io.getWantCaptureKeyboard()) {
+                return;
+            }
+        }
+
         Transform transform = gameObject.transform;
 
         if (Input.isMouseButtonDown(GLFW_MOUSE_BUTTON_RIGHT)) {
