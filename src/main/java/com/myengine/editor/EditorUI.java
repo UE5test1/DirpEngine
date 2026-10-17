@@ -15,7 +15,6 @@ import imgui.ImGui;
 import imgui.ImGuiIO;
 import imgui.flag.ImGuiCond;
 import imgui.flag.ImGuiConfigFlags;
-import imgui.flag.ImGuiTreeNodeFlags;
 import imgui.gl3.ImGuiImplGl3;
 import imgui.glfw.ImGuiImplGlfw;
 import imgui.type.ImBoolean;
@@ -74,8 +73,6 @@ public class EditorUI {
     private boolean playing = false;
     private String editModeSnapshot = null;
 
-    private final ScriptsPanel scriptsPanel = new ScriptsPanel();
-
     public EditorUI(Application app) {
         this.app = app;
     }
@@ -115,7 +112,6 @@ public class EditorUI {
         drawHierarchy();
         drawInspector();
         drawBuildPanel();
-        scriptsPanel.render();
 
         ImGui.render();
         imGuiGl3.renderDrawData(ImGui.getDrawData());
@@ -178,8 +174,8 @@ public class EditorUI {
 
         Scene scene = app.getScene();
         for (GameObject go : scene.getGameObjects()) {
-            if (go.transform.parent == null) { // only recurse from root objects
-                drawHierarchyNode(go);
+            if (ImGui.selectable(go.name, go == selected)) {
+                selected = go;
             }
         }
 
@@ -203,33 +199,6 @@ public class EditorUI {
         }
 
         ImGui.end();
-    }
-
-    private void drawHierarchyNode(GameObject go) {
-        List<Transform> children = go.transform.getChildren();
-
-        int flags = ImGuiTreeNodeFlags.OpenOnArrow | ImGuiTreeNodeFlags.SpanAvailWidth
-                | ImGuiTreeNodeFlags.DefaultOpen;
-        if (go == selected) {
-            flags |= ImGuiTreeNodeFlags.Selected;
-        }
-        if (children.isEmpty()) {
-            flags |= ImGuiTreeNodeFlags.Leaf | ImGuiTreeNodeFlags.NoTreePushOnOpen;
-        }
-
-        // OpenOnArrow means clicking the label itself (not the arrow) doesn't toggle
-        // open/closed — we use that click for selection instead, via isItemClicked().
-        boolean open = ImGui.treeNodeEx(go.name + "##" + System.identityHashCode(go), flags);
-        if (ImGui.isItemClicked()) {
-            selected = go;
-        }
-
-        if (open && !children.isEmpty()) {
-            for (Transform child : children) {
-                drawHierarchyNode(child.gameObject);
-            }
-            ImGui.treePop();
-        }
     }
 
     private void saveScene() {
@@ -258,29 +227,6 @@ public class EditorUI {
         selected = cube;
     }
 
-    private void drawParentPicker(GameObject go) {
-        String currentLabel = go.transform.parent != null ? go.transform.parent.gameObject.name : "(none)";
-
-        if (ImGui.beginCombo("Parent", currentLabel)) {
-            if (ImGui.selectable("(none)", go.transform.parent == null)) {
-                go.transform.setParent(null);
-            }
-            for (GameObject candidate : app.getScene().getGameObjects()) {
-                if (candidate == go) {
-                    continue; // can't parent an object to itself
-                }
-                boolean isCurrent = candidate.transform == go.transform.parent;
-                if (ImGui.selectable(candidate.name, isCurrent)) {
-                    // setParent() itself refuses anything that would create a cycle
-                    // (e.g. picking one of this object's own descendants), so no
-                    // extra validation is needed here.
-                    go.transform.setParent(candidate.transform);
-                }
-            }
-            ImGui.endCombo();
-        }
-    }
-
     // ---------------------------------------------------------------- Inspector
 
     private void drawInspector() {
@@ -295,7 +241,6 @@ public class EditorUI {
         }
 
         ImGui.text(selected.name);
-        drawParentPicker(selected);
         ImGui.separator();
 
         Transform t = selected.transform;
@@ -303,21 +248,21 @@ public class EditorUI {
         posBuf[0] = t.position.x;
         posBuf[1] = t.position.y;
         posBuf[2] = t.position.z;
-        if (ImGui.dragFloat3("Position (local)", posBuf, 0.05f)) {
+        if (ImGui.dragFloat3("Position", posBuf, 0.05f)) {
             t.position.set(posBuf[0], posBuf[1], posBuf[2]);
         }
 
         rotBuf[0] = t.rotation.x;
         rotBuf[1] = t.rotation.y;
         rotBuf[2] = t.rotation.z;
-        if (ImGui.dragFloat3("Rotation (local)", rotBuf, 0.5f)) {
+        if (ImGui.dragFloat3("Rotation", rotBuf, 0.5f)) {
             t.rotation.set(rotBuf[0], rotBuf[1], rotBuf[2]);
         }
 
         scaleBuf[0] = t.scale.x;
         scaleBuf[1] = t.scale.y;
         scaleBuf[2] = t.scale.z;
-        if (ImGui.dragFloat3("Scale (local)", scaleBuf, 0.05f)) {
+        if (ImGui.dragFloat3("Scale", scaleBuf, 0.05f)) {
             t.scale.set(scaleBuf[0], scaleBuf[1], scaleBuf[2]);
         }
 
