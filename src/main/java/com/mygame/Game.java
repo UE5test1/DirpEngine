@@ -10,6 +10,7 @@ import com.myengine.graphics.Mesh;
 import com.myengine.graphics.MeshFactory;
 import com.myengine.graphics.Shader;
 import com.myengine.scene.SceneIO;
+import com.myengine.scripting.ScriptManager;
 
 import java.io.IOException;
 
@@ -43,6 +44,11 @@ public class Game extends Application {
 
     @Override
     protected void init() {
+        // Must happen before loading the scene: a saved scene can reference a
+        // script-based component by name, which ComponentRegistry (used by
+        // SceneIO to reconstruct it) only knows about once this has run.
+        ScriptManager.registerAllKnownScripts();
+
         if (SceneIO.loadIfPresent(scene)) {
             return; // loaded a previously-saved scene — nothing more to do
         }

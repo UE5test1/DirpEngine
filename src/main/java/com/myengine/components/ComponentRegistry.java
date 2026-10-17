@@ -15,9 +15,13 @@ import java.util.function.Supplier;
  *   <li>the editor's Inspector "+ Add Component" menu ({@link #ADDABLE_TYPE_NAMES})</li>
  *   <li>scene saving/loading (SceneIO), which needs to reconstruct a component
  *       by name when reading a saved scene file back in</li>
+ *   <li>{@code ScriptManager}, which registers your own scripts (written and
+ *       compiled from the editor's Scripts panel) here at runtime, the same
+ *       way the built-in components below register themselves at class-load time</li>
  * </ul>
- * To make your own component both save/load-able AND addable from the editor,
- * add one {@code register(...)} line below.
+ * To make your own built-in component both save/load-able AND addable from
+ * the editor, add one {@code register(...)} line below. User scripts written
+ * via the Scripts panel register themselves automatically — no edit needed here.
  */
 public final class ComponentRegistry {
 
@@ -41,11 +45,17 @@ public final class ComponentRegistry {
     private ComponentRegistry() {
     }
 
-    private static void register(String typeName, String displayName, Supplier<Component> factory, boolean addable) {
+    /** Full form: used for built-in components, where the menu label can differ from the class name. */
+    public static void register(String typeName, String displayName, Supplier<Component> factory, boolean addable) {
         BY_TYPE_NAME.put(typeName, factory);
         DISPLAY_NAMES.put(typeName, displayName);
-        if (addable) {
+        if (addable && !ADDABLE_TYPE_NAMES.contains(typeName)) {
             ADDABLE_TYPE_NAMES.add(typeName);
         }
+    }
+
+    /** Convenience form for user scripts (see ScriptManager): always addable, display name = class name. */
+    public static void register(String typeName, Supplier<Component> factory) {
+        register(typeName, typeName, factory, true);
     }
 }

@@ -20,7 +20,7 @@ public class MeshRenderer extends Component {
 
     public void render(Matrix4f view, Matrix4f projection, Vector3f lightDirection) {
         shader.use();
-        shader.setMat4("model", gameObject.transform.getModelMatrix());
+        shader.setMat4("model", gameObject.transform.getWorldMatrix());
         shader.setMat4("view", view);
         shader.setMat4("projection", projection);
         shader.setVec3("objectColor", color);

@@ -21,6 +21,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.IdentityHashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -51,9 +52,15 @@ public final class SceneIO {
 
     /** Serializes the scene to a JSON string, without touching disk. */
     public static String toJson(Scene scene) {
+        List<GameObject> objects = scene.getGameObjects();
+        Map<GameObject, Integer> indexOf = new IdentityHashMap<>();
+        for (int i = 0; i < objects.size(); i++) {
+            indexOf.put(objects.get(i), i);
+        }
+
         SceneData data = new SceneData();
-        for (GameObject go : scene.getGameObjects()) {
-            data.gameObjects.add(toData(go));
+        for (GameObject go : objects) {
+            data.gameObjects.add(toData(go, indexOf));
         }
         return GSON.toJson(data);
     }
@@ -66,12 +73,15 @@ public final class SceneIO {
         Files.writeString(target, toJson(scene), StandardCharsets.UTF_8);
     }
 
-    private static GameObjectData toData(GameObject go) {
+    private static GameObjectData toData(GameObject go, Map<GameObject, Integer> indexOf) {
         GameObjectData data = new GameObjectData();
         data.name = go.name;
         data.position = toArray(go.transform.position);
         data.rotation = toArray(go.transform.rotation);
         data.scale = toArray(go.transform.scale);
+
+        Transform parent = go.transform.parent;
+        data.parentIndex = (parent != null) ? indexOf.getOrDefault(parent.gameObject, -1) : -1;
 
         MeshRenderer renderer = go.getComponent(MeshRenderer.class);
         if (renderer != null) {
@@ -126,8 +136,21 @@ public final class SceneIO {
         if (data == null || data.gameObjects == null) {
             return;
         }
+
+        // Pass 1: create every GameObject (and its non-hierarchy components) first —
+        // a child can appear before its parent in the list, so parenting can't be
+        // wired up until everything exists.
+        List<GameObject> created = new ArrayList<>(data.gameObjects.size());
         for (GameObjectData god : data.gameObjects) {
-            fromData(scene, god);
+            created.add(fromData(scene, god));
+        }
+
+        // Pass 2: now that every index is resolvable, apply parent relationships.
+        for (int i = 0; i < data.gameObjects.size(); i++) {
+            int parentIndex = data.gameObjects.get(i).parentIndex;
+            if (parentIndex >= 0 && parentIndex < created.size()) {
+                created.get(i).transform.setParent(created.get(parentIndex).transform);
+            }
         }
     }
 
@@ -149,7 +172,7 @@ public final class SceneIO {
         }
     }
 
-    private static void fromData(Scene scene, GameObjectData data) {
+    private static GameObject fromData(Scene scene, GameObjectData data) {
         GameObject go = scene.createGameObject(data.name);
         applyVector(go.transform.position, data.position);
         applyVector(go.transform.rotation, data.rotation);
@@ -179,6 +202,8 @@ public final class SceneIO {
         if (camera != null) {
             scene.setActiveCamera(camera);
         }
+
+        return go;
     }
 
     private static void applyComponentData(GameObject go, ComponentData data) {
@@ -223,6 +248,7 @@ public final class SceneIO {
         float[] position;
         float[] rotation;
         float[] scale;
+        int parentIndex = -1;
         Boolean hasMeshRenderer;
         float[] color;
         List<ComponentData> components = new ArrayList<>();

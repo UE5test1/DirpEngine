@@ -97,12 +97,19 @@ to move or dock them together against the window edges — docking is enabled).
 
 - **Play Mode** — Play/Stop toggle. See "Edit mode vs. Play mode" above.
 
-- **Hierarchy** — every GameObject in the scene. Click a name to select it.
-  "+ Add Cube" spawns a new cube into the running scene, live. **"Save Scene"**
-  writes the current scene to disk — see "Saving your scene" below; without
-  clicking this, anything you do in the editor is lost when you close the window.
-- **Inspector** — the selected object's Position/Rotation/Scale (drag the
-  numbers, or double-click to type a value), and its color if it has a
+- **Hierarchy** — every GameObject in the scene, shown as a **tree**: parent
+  objects have an arrow to expand/collapse their children. Click a name to
+  select it (clicking the arrow only expands/collapses — it won't change
+  selection). "+ Add Cube" spawns a new cube into the running scene, live.
+  **"Save Scene"** writes the current scene to disk — see "Saving your scene"
+  below; without clicking this, anything you do in the editor is lost when you
+  close the window.
+- **Inspector** — the selected object's **Parent** (a dropdown — pick any
+  other object to make this one its child, or "(none)" to make it a root
+  object again), then Position/Rotation/Scale, labeled **(local)** since
+  they're relative to the parent if it has one (matching Unity's
+  `localPosition`/etc. — exactly like the parent, drag the numbers or
+  double-click to type). It also shows the object's color if it has a
   MeshRenderer. Edits apply immediately — you'll see the spinning cube react
   in real time. Below that, **+ Add Component** lets you attach a ready-made
   "function" to the object without writing code:
@@ -153,8 +160,66 @@ keep in sync.
 
 **Roadmap for extending the editor further** (each is a separate chunk of work):
 transform gizmos in the viewport for move/rotate/scale + mouse-picking to
-select objects, a file/asset browser panel, and a simple in-panel text editor
-for shaders/scripts. (Edit/Play mode is done — see above.)
+select objects, and a general file/asset browser panel. (Edit/Play mode and
+a script editor are both done — see above and below.)
+
+## Scripts (writing your own components from inside the editor)
+
+The **Scripts** panel lets you write real Java Component scripts without
+leaving the editor or restarting the game — no new language, just the JDK's
+own compiler, called at runtime.
+
+**Workflow:**
+1. Click **+ New Script**, give it a name (e.g. `Bounce`) — this creates
+   `src/main/java/com/mygame/scripts/Bounce.java` from a small template and
+   opens it in the panel's text editor.
+2. Write your logic — you have the exact same `Component` API as any
+   built-in one (`gameObject`, `gameObject.transform`, `update(deltaTime)`, etc.).
+3. Click **Compile && Attach**. This compiles the file using the JDK's own
+   compiler (`javax.tools` — the same one `javac`/IntelliJ use) and registers
+   it into `ComponentRegistry` — the exact same registry `Rotator`,
+   `ColorCycle`, etc. live in. It immediately shows up in the Inspector's
+   **+ Add Component** menu for any GameObject, and (since it's now a normal
+   registered component) also saves/loads with the scene like anything else.
+4. Select a GameObject, open **+ Add Component**, pick your script's name.
+
+**Why this needs no extra runtime dependency for the built game:** scripts
+are real `.java` files under `src/main/java/com/mygame/scripts/`, so a normal
+`mvn package` build compiles them exactly like `Game.java` — the built
+`GamePlayer` jar just loads the already-compiled class at startup (via
+`src/main/resources/scripts-manifest.txt`, written automatically the first
+time you compile a script), no JDK or compiler needed at runtime for the
+shipped game. The JDK-at-runtime requirement only applies to the **editor's**
+Compile button, and IntelliJ's bundled JDK already satisfies it.
+
+**One real limitation, worth knowing:** recompiling a script that's already
+been compiled *and loaded* earlier in the same run won't take effect until
+you restart the game. The JVM caches a loaded class by name and won't swap in
+new bytecode for it mid-session. First-time compiling a new script, or
+compiling right after editing it — *before* ever running with it attached —
+works fine every time; it's specifically "edit → recompile → see the change
+without restarting" for an already-running script that doesn't work yet. If
+that turns out to matter a lot in practice, a follow-up fix (loading scripts
+through their own dedicated classloader instead of the shared one) would
+solve it — flagging it now rather than silently getting it wrong.
+
+## Parenting
+
+GameObjects can now be nested (Hierarchy tree + the Inspector's Parent
+dropdown). A few things worth knowing:
+
+- `transform.position`/`rotation`/`scale` are **local** — relative to the
+  parent, same as Unity's `localPosition` etc. Use `transform.getWorldMatrix()`
+  or `transform.getWorldPosition()` when you need the fully-composed world-space
+  result (e.g. writing your own component that needs to know where something
+  really is on screen).
+- Parenting refuses to create a cycle (e.g. trying to parent an object to its
+  own child) — it just silently does nothing rather than corrupting the scene.
+- **Don't parent the camera (yet).** `Camera`'s facing direction is computed
+  from its own local rotation only, not the full parent chain — a camera
+  parented under a rotating object won't turn with it. Position still works
+  correctly either way (`getWorldPosition()` does account for the parent
+  chain); it's specifically the look direction that's simplified for now.
 
 ## How it's organized
 
@@ -167,11 +232,16 @@ com.myengine.components  Camera, MeshRenderer, Rotator, FreeCameraController,
                            shared list of save/load-able + addable component types)
 com.myengine.scene       Scene (holds/updates/renders GameObjects), SceneIO
                            (saves/loads scene.json)
-com.myengine.editor      EditorUI (Hierarchy/Inspector/Build overlay, ImGui-based)
+com.myengine.scripting   ScriptManager (compiles/registers your .java scripts
+                           from com.mygame.scripts, at runtime for the editor)
+com.myengine.editor      EditorUI (Hierarchy/Inspector/Build/Play overlay),
+                           ScriptsPanel (the Scripts panel), both ImGui-based
 
 com.mygame                Your actual game — Game.java builds the demo scene.
                            Main.java = dev entry point (editor on).
                            GamePlayer.java = built/shipped entry point (editor off).
+com.mygame.scripts        Your own Component scripts, written from the editor's
+                           Scripts panel (starts empty — nothing here yet)
 ```
 
 The idea, same as Unity: **everything under `com.myengine` is reusable engine
